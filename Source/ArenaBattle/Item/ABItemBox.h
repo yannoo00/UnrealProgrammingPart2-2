@@ -15,6 +15,12 @@ public:
 	// Sets default values for this actor's properties
 	AABItemBox();
 
+	FORCEINLINE class UBoxComponent* GetTrigger() { return Trigger; }
+
+protected:
+	virtual void PostInitializeComponents() override;
+
+
 protected:
 	UPROPERTY(VisibleAnywhere, Category = Box)
 	TObjectPtr<class UBoxComponent> Trigger;
