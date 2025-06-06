@@ -1,4 +1,4 @@
-/// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Gimmick/ABStageGimmick.h"
@@ -8,8 +8,6 @@
 #include "Character/ABCharacterNonPlayer.h"
 #include "Item/ABItemBox.h"
 #include "Engine/OverlapResult.h"
-
-
 
 // Sets default values
 AABStageGimmick::AABStageGimmick()
@@ -73,9 +71,10 @@ AABStageGimmick::AABStageGimmick()
 		FVector BoxLocation = Stage->GetSocketLocation(GateSocket) / 2;
 		RewardBoxLocations.Add(GateSocket, BoxLocation);
 	}
-	
-}
 
+	// Stage Stat
+	CurrentStageNum = 0;
+}
 
 void AABStageGimmick::OnConstruction(const FTransform& Transform)
 {
@@ -83,7 +82,6 @@ void AABStageGimmick::OnConstruction(const FTransform& Transform)
 
 	SetState(CurrentState);
 }
-
 
 void AABStageGimmick::OnStageTriggerBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
@@ -111,10 +109,15 @@ void AABStageGimmick::OnGateTriggerBeginOverlap(UPrimitiveComponent* OverlappedC
 
 	if (!bResult)
 	{
-		GetWorld()->SpawnActor<AABStageGimmick>(NewLocation, FRotator::ZeroRotator);
+		FTransform NewTransform(NewLocation);
+		AABStageGimmick* NewGimmick = GetWorld()->SpawnActorDeferred<AABStageGimmick>(AABStageGimmick::StaticClass(), NewTransform);
+		if (NewGimmick)
+		{
+			NewGimmick->SetStageNum(CurrentStageNum + 1);
+			NewGimmick->FinishSpawning(NewTransform);
+		}
 	}
 }
-
 
 void AABStageGimmick::OpenAllGates()
 {
@@ -131,8 +134,6 @@ void AABStageGimmick::CloseAllGates()
 		(Gate.Value)->SetRelativeRotation(FRotator::ZeroRotator);
 	}
 }
-
-
 
 void AABStageGimmick::SetState(EStageState InNewState)
 {
@@ -168,7 +169,6 @@ void AABStageGimmick::SetFight()
 	GetWorld()->GetTimerManager().SetTimer(OpponentTimerHandle, this, &AABStageGimmick::OnOpponentSpawn, OpponentSpawnTime, false);
 }
 
-
 void AABStageGimmick::SetChooseReward()
 {
 	StageTrigger->SetCollisionProfileName(TEXT("NoCollision"));
@@ -199,15 +199,15 @@ void AABStageGimmick::OnOpponentDestroyed(AActor* DestroyedActor)
 
 void AABStageGimmick::OnOpponentSpawn()
 {
-	const FVector SpawnLocation = GetActorLocation() + FVector::UpVector * 88.0f;
-	AActor* OpponentActor = GetWorld()->SpawnActor(OpponentClass, &SpawnLocation, &FRotator::ZeroRotator);
-	AABCharacterNonPlayer* ABOpponentCharacter = Cast<AABCharacterNonPlayer>(OpponentActor);
+	const FTransform SpawnTransform(GetActorLocation() + FVector::UpVector * 88.0f);
+	AABCharacterNonPlayer* ABOpponentCharacter = GetWorld()->SpawnActorDeferred<AABCharacterNonPlayer>(OpponentClass, SpawnTransform);
 	if (ABOpponentCharacter)
 	{
 		ABOpponentCharacter->OnDestroyed.AddDynamic(this, &AABStageGimmick::OnOpponentDestroyed);
+		ABOpponentCharacter->SetLevel(CurrentStageNum);
+		ABOpponentCharacter->FinishSpawning(SpawnTransform);
 	}
 }
-
 
 void AABStageGimmick::OnRewardTriggerBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
@@ -231,14 +231,21 @@ void AABStageGimmick::SpawnRewardBoxes()
 {
 	for (const auto& RewardBoxLocation : RewardBoxLocations)
 	{
-		FVector WorldSpawnLocation = GetActorLocation() + RewardBoxLocation.Value + FVector(0.0f, 0.0f, 30.0f);
-		AActor* ItemActor = GetWorld()->SpawnActor(RewardBoxClass, &WorldSpawnLocation, &FRotator::ZeroRotator);
-		AABItemBox* RewardBoxActor = Cast<AABItemBox>(ItemActor);
+		FTransform SpawnTransform(GetActorLocation() + RewardBoxLocation.Value + FVector(0.0f, 0.0f, 30.0f));
+		AABItemBox* RewardBoxActor = GetWorld()->SpawnActorDeferred<AABItemBox>(RewardBoxClass, SpawnTransform);
 		if (RewardBoxActor)
 		{
 			RewardBoxActor->Tags.Add(RewardBoxLocation.Key);
 			RewardBoxActor->GetTrigger()->OnComponentBeginOverlap.AddDynamic(this, &AABStageGimmick::OnRewardTriggerBeginOverlap);
 			RewardBoxes.Add(RewardBoxActor);
+		}
+	}
+
+	for (const auto& RewardBox : RewardBoxes)
+	{
+		if (RewardBox.IsValid())
+		{
+			RewardBox.Get()->FinishSpawning(RewardBox.Get()->GetActorTransform());
 		}
 	}
 }
