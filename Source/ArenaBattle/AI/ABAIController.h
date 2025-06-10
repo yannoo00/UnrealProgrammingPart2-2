@@ -4,7 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "AIController.h"
+#include "ABAI.h"
 #include "ABAIController.generated.h"
+
 
 /**
  *
